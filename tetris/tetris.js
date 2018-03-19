@@ -1,3 +1,4 @@
+'use strict'
 
 var canvas = document.querySelector('#id_canvas')
 var context = canvas.getContext('2d')
@@ -169,7 +170,7 @@ var Block = function() {
 
 	b.reset = function() {
 		this.isFixed = false
-		type = 0
+		this.type = 0
 	}
 
 	return b
@@ -191,9 +192,9 @@ var Wall = function() {
 	w.init = function() {
 		this.UIPos.x = 10
 		this.UIPos.y = 10
-		for(i = 0; i < 20; i++)	{
+		for(let i = 0; i < 20; i++)	{
 			this.body[i] = []
-			for(j = 0; j < 10; j++)	{
+			for(let j = 0; j < 10; j++)	{
 				this.body[i][j] = Block()
 			}
 		}
@@ -203,8 +204,8 @@ var Wall = function() {
 	}
 
 	w.reset = function() {
-		for(i = 0; i < 20; i++)	{
-			for(j = 0; j < 10; j++)	{
+		for(let i = 0; i < 20; i++)	{
+			for(let j = 0; j < 10; j++)	{
 				this.body[i][j].reset()
 			}
 		}
