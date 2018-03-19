@@ -6,17 +6,21 @@ var log = console.log.bind(console)
 
 //常量
 const ConstDefine = {
+	//四个方向键
 	dir_left: 'dir_left',
 	dir_right: 'dir_right',
 	dir_up: 'dir_up',
 	dir_down: 'dir_down',
 
+	//方块尺寸 单位：px
 	block_width: 30,
 	block_height: 30,
 
+	//方块速度，掉落一层的时间(ms)
 	defaultSpeed: 1000 //1 sec
 }
 
+// 常用颜色
 const ConstColor = {
 	WallBgColor: '#C0C0C0',
 	WallColor: '#000000',
@@ -24,6 +28,7 @@ const ConstColor = {
 	BlockColor: '#000000',
 }
 
+// 方块类型
 const BlockType = {
 	BlockType_S: 0,
 	BlockType_Z: 1,
@@ -37,9 +42,10 @@ const BlockType = {
 
 //全局变量
 var Static = {
-	game_pause: false,
+	game_pause: false,//游戏是否暂停
 }
 
+//向量，用于表示2D速度和2D坐标
 var Vector2 = function() {
 	var v = {
 		x: 0,
@@ -49,6 +55,7 @@ var Vector2 = function() {
 	return v
 }
 
+//矩形对象
 var Rect = function() {
 	var r = {
 		pos: Vector2(),
@@ -59,27 +66,33 @@ var Rect = function() {
 	return r
 }
 
+//画图函数封装
 var Draw = {
+	//清空
 	clearRect: function(x,y,w,h) {
 		context.clearRect(x,y,w,h); 
 	},
 
+	//画外框
 	drawRect: function(x,y,w,h,color) {
 		context.strokeStyle = color;  
 		context.strokeRect(x,y,w,h);  
 	},
 
+	//填充矩形
 	fillRect: function(x,y,w,h,color) {
 		context.fillStyle = color;  
 		context.fillRect(x,y,w,h);  
 	},
 
+	//写字
 	fillText: function(x,y,font,string) {
 		context.font=font;
 		context.fillText(string,x,y);
 	}
 }
 
+//七种形状的基本数据，每一种包含的形态以及每个形态占据的位置
 var blockData = [	
 	[//S
 		[[0,-1],[1,-1],[-1,0],[0,0]], [[0,-1],[0,0],[1,0],[1,1]],
@@ -114,6 +127,7 @@ var blockData = [
 	],
 ]
 
+//形状的对象
 var Tetromino = function() {
 	var t = {
 		blockType: 0,
@@ -121,24 +135,29 @@ var Tetromino = function() {
 		index: 0,
 	}
 
+	//初始化形状
 	t.reset = function(newType=0) {
 		this.blockType = newType
 		this.index = 0
 	}
 
+	//旋转
 	t.rotate = function() {
 		this.index = (this.index + 1 >= blockData[this.blockType].length) ? 0 : this.index + 1
 	}
 
+	//移动到某个位置
 	t.moveTo = function(pos) {
 		this.pos.x += pos.x
 		this.pos.y += pos.y
 	}
 
+	//获取形状当前状态的数据
 	t.getShape = function() {
 		return blockData[this.blockType][this.index]
 	}
 	
+	//获取形状下一个状态的数据
 	t.getNextShape = function() {
 		var nextIndex = this.index + 1
 		if(nextIndex >= blockData[this.blockType].length)
@@ -148,6 +167,7 @@ var Tetromino = function() {
 		return blockData[this.blockType][nextIndex]
 	}
 
+	//画形状
 	t.draw = function(parentOffset) {
 		var data = this.getShape()
 		for(let i = 0; i < data.length; i++)
@@ -162,12 +182,14 @@ var Tetromino = function() {
 	return t
 }
 
+//墙体中用到的每一个小方块
 var Block = function() {
 	var b = {
-		isFixed: false,
-		type: 0,
+		isFixed: false, //是否固定，如果形状落到底部，则固定在小方块中
+		type: 0, //固定的形状类型，用以绘图的时候显示
 	}
 
+	//初始化
 	b.reset = function() {
 		this.isFixed = false
 		this.type = 0
@@ -176,19 +198,21 @@ var Block = function() {
 	return b
 }
 
+//墙体
 var Wall = function() {
 	var timer = 0
 
 	var w = {
-		body: [],
-		UIPos: Vector2(),
-		tetromino: Tetromino(),
-		nextTetrominoType: 0,
-		speed: 0,
-		timer: null,
-		GameLost: null,
+		body: [], //墙体上10x20的小方块
+		UIPos: Vector2(), //用于画在Canvas上的坐标
+		tetromino: Tetromino(), //当前形状
+		nextTetrominoType: 0, //下一形状
+		speed: 0, //当前速度
+		timer: null, //计时器，用于下落计时
+		GameLost: null, //游戏失败的callback
 	}
 
+	//初始化
 	w.init = function() {
 		this.UIPos.x = 10
 		this.UIPos.y = 10
@@ -199,10 +223,13 @@ var Wall = function() {
 			}
 		}
 
+		//初始化下一个形状
 		this.nextTetromino()
+		//初始化当前速度
 		this.speed = ConstDefine.defaultSpeed
 	}
 
+	//初始化
 	w.reset = function() {
 		for(let i = 0; i < 20; i++)	{
 			for(let j = 0; j < 10; j++)	{
@@ -217,17 +244,20 @@ var Wall = function() {
 		this.speed = ConstDefine.defaultSpeed
 	}
 
+	//随机生成下一个形状
 	w.randomNextTetromino = function() {
 		this.nextTetrominoType = Math.floor(Math.random() * BlockType.BlockType_MAX)
 		log('Error genrate wrong type', this.nextTetrominoType)
 	}
 
+	//充值计时器，开始下一次下落的计时
 	w.resetTetrominoTimer = function() {
 		this.timer = setInterval(function() {
 			w.autoMove()
 		}, this.speed)
 	}
 
+	//尝试移动到某个方向，需要在里面判断是否可移动
 	w.moveTo = function(direction) {
 		var newPos = Vector2()
 		switch(direction)
@@ -249,6 +279,7 @@ var Wall = function() {
 		}
 	}
 
+	//尝试旋转，判断是否可旋转
 	w.rotateNext = function() {
 		log('w.rotateNext')
 		if(this.canRotate())
@@ -257,6 +288,7 @@ var Wall = function() {
 		}
 	}
 
+	//碰撞检测，用于判断是否可移动和旋转
 	w.checkCollision = function(pos, shape) {
 		for(let i = 0; i < shape.length; i++)
 		{
@@ -270,10 +302,12 @@ var Wall = function() {
 		return true
 	}
 
+	//判断是否可旋转
 	w.canRotate = function() {
 		return this.checkCollision(this.tetromino.pos, this.tetromino.getNextShape())
 	}
 
+	//判断是否可移动
 	w.canMoveTo = function(pos) {
 		var newPos = Vector2()
 		newPos.x = pos.x + this.tetromino.pos.x
@@ -281,6 +315,7 @@ var Wall = function() {
 		return this.checkCollision(newPos, this.tetromino.getShape())
 	}
 
+	//落到底部后固定形状到墙体中
 	w.fixTetromino = function() {
 		let shape = this.tetromino.getShape()
 		for(let i = 0; i < shape.length; i++)
@@ -292,6 +327,7 @@ var Wall = function() {
 		}
 	}
 
+	//检测是否失败
 	w.checkLost = function() {
 		let shape = this.tetromino.getShape()
 		for(let i = 0; i < shape.length; i++){
@@ -301,6 +337,7 @@ var Wall = function() {
 		return false
 	}
 
+	//随机生成下一个形状
 	w.nextTetromino = function() {
 		this.tetromino.reset()
 		this.tetromino.blockType = this.nextTetrominoType
@@ -309,6 +346,7 @@ var Wall = function() {
 		this.randomNextTetromino()
 	}
 
+	//自动下落一层
 	w.autoMove = function() {
 		var downPos = Vector2()
 		downPos.y = 1
@@ -324,6 +362,7 @@ var Wall = function() {
 		}
 	}
 
+	//墙体绘制，包括当前下落的形状
 	w.draw = function () {
 		Draw.fillRect(this.UIPos.x, this.UIPos.y, 
 			this.body[0].length * ConstDefine.block_width, 
@@ -362,6 +401,7 @@ var Wall = function() {
 	return w
 }
 
+//游戏类
 var Game = function () {
 	var g = {
 		actions: {},
@@ -375,7 +415,7 @@ var Game = function () {
 
 	g.init = function() {
 		
-		//event
+		//添加按键按下的事件
 		window.addEventListener('keydown', function(event) {
 			if (event.key == 'a' || event.key == 'ArrowLeft') {
 				g.keydown[ConstDefine.dir_left] = true
@@ -398,6 +438,7 @@ var Game = function () {
 			} 
 		})
 	
+		//添加按键松开的事件
 		window.addEventListener('keyup', function(event) {
 			if (event.key == 'a' || event.key == 'ArrowLeft') {
 				g.keydown[ConstDefine.dir_left] = false
@@ -410,6 +451,7 @@ var Game = function () {
 			} 
 		})
 
+		//注册按键的回调
 		this.registerAction(ConstDefine.dir_left, function() {
 			wall.moveTo(ConstDefine.dir_left)
 		})
@@ -423,14 +465,15 @@ var Game = function () {
 			wall.rotateNext()
 		})
 
-		//start game
-		g.restartGame()
+		//开始游戏，后续需要通过按键或者按钮激活
+		g.newGame()
 	}
 
 	g.registerAction = function(key, callback) {
 		g.actions[key] = callback
 	}
 
+	//按键检测
 	g.update = function() {
 		if(g.keydown[ConstDefine.dir_left])
 			g.actions[ConstDefine.dir_left]()
@@ -445,7 +488,8 @@ var Game = function () {
 			g.actions[ConstDefine.dir_down]()
 	}
 
-	g.restartGame = function() {
+	//开始新的游戏
+	g.newGame = function() {
 		//clear score
 		this.score = 0
 		//clear wall
