@@ -4,6 +4,9 @@ var mainCanvas = document.querySelector('#main_canvas')
 var smallCanvas = document.querySelector('#small_canvas')
 var log = console.log.bind(console)
 var startButton = document.getElementById('startGameBtn')
+var topScoreText = document.getElementById('top_score')
+var scoreText = document.getElementById('score')
+var linesText = document.getElementById('lines')
 
 //常量
 const ConstDefine = {
@@ -17,8 +20,9 @@ const ConstDefine = {
 	block_width: 30,
 	block_height: 30,
 
-	//游戏等级，跟速度挂钩
-	levelSpeed: [1000, 500, 250, 10, 100, 50], //不同等级对应的速度，单位(ms)
+	//游戏等级，跟速度挂钩,7个等级
+	levelSpeed: [1000, 800, 500, 300, 200, 100, 50], //不同等级对应的速度，单位(ms)
+	levelupScore: [5000, 2000, 1000, 500, 250, 120, 60],
 
 	//同时消除层数对应的分数
 	score: [10, 20, 40, 100],
@@ -26,17 +30,22 @@ const ConstDefine = {
 	//游戏状态
 	gameStateStop: 0,
 	gameStateRunning: 1,
+	gameStateGameOver: 2,
+
+	//消除动画闪烁间隔
+	FlashInterval: 80,
+	DisappearTime: 300,
 }
 
 // 常用颜色
 const ConstColor = {
-	WallBgColor: "#ddeeff", //'#C0C0C0',
-	WallColor: '#000000',
-	BlockBgColor: "#000000", // '#909090',
-	BlockColor: '#000000',
+	WallColor: "#ddeeff", //'#C0C0C0',
+	WallBorderColor: '#000000',
+	BlockColor: "#909090", // '#909090',
+	BlockBorderColor: '#000000',
 }
 
-const ConstBlockColor = [
+const TetrominoColor = [
 	"#60ceff", //BlockType_S
 	"#00fc00", //BlockType_Z
 	"#ff6500", //BlockType_L
@@ -65,11 +74,12 @@ const BlockType = {
 
 //全局变量
 var Static = {
-	game_state: 0,
+	game_level: 0, //游戏等级，与难度挂钩, 最高4
 	game_pause: false,//游戏是否暂停
 	game_score: 0, //分数
+	game_topScore: 0, //历史最高分数
 	game_lines: 0, //消除的行数
-	game_level: ConstDefine.gameStateStop, //游戏等级，与难度挂钩, 最高4
+	game_state: ConstDefine.gameStateStop, 
 }
 
 //向量，用于表示2D速度和2D坐标
@@ -200,8 +210,8 @@ var Tetromino = function () {
 		for (let i = 0; i < data.length; i++) {
 			let x = parentOffset.x + (this.pos.x + data[i][0]) * ConstDefine.block_width
 			let y = parentOffset.y + (this.pos.y + data[i][1]) * ConstDefine.block_height
-			Draw.fillRect(this.canvas, x, y, ConstDefine.block_width, ConstDefine.block_height, ConstBlockColor[this.blockType])
-			Draw.drawRect(this.canvas, x, y, ConstDefine.block_width, ConstDefine.block_height, ConstColor.BlockBgColor)
+			Draw.fillRect(this.canvas, x + 1, y + 1, ConstDefine.block_width - 2, ConstDefine.block_height - 2, TetrominoColor[this.blockType])
+			Draw.drawRect(this.canvas, x + 1, y + 1, ConstDefine.block_width - 2, ConstDefine.block_height - 2, ConstColor.BlockBorderColor)
 		}
 	}
 
@@ -292,9 +302,10 @@ var Wall = function () {
 		}, this.speed)
 	}
 
+	//设置速度
 	w.setSpeed = function(game_level) {
 		this.speed = game_level < ConstDefine.levelSpeed.length ? ConstDefine.levelSpeed[game_level] : ConstDefine.levelSpeed[ConstDefine.levelSpeed.length - 1]
-		if(Static.game_state == ConstDefine.gameStateRunning) {
+		if(Static.game_state != ConstDefine.gameStateStop) {
 			this.resetTetrominoTimer()
 		}
 	}
@@ -353,7 +364,7 @@ var Wall = function () {
 				for (let i in lines) {
 					that.playLineAnim(lines[i])
 				}
-			}, 100)
+			}, ConstDefine.FlashInterval)
 
 			//1 sec 后结束
 			setTimeout(() => {
@@ -362,7 +373,7 @@ var Wall = function () {
 				}
 				clearInterval(that.animTimer)
 				resolve()
-			}, 500)
+			}, ConstDefine.DisappearTime)
 		})
 
 		return clearAnim
@@ -413,7 +424,23 @@ var Wall = function () {
 		var lines = this.getClearLines()
 		if (lines.length > 0) {
 			Static.game_score += ConstDefine.score[lines.length - 1]
+			Static.game_topScore = Static.game_topScore < Static.game_score ? Static.game_score : Static.game_topScore
 			Static.game_lines += lines.length
+			
+			topScoreText.innerHTML = Static.game_topScore
+			scoreText.innerHTML = Static.game_score
+			linesText.innerHTML = Static.game_lines
+			
+			for(let i in ConstDefine.levelupScore) {
+				if(Static.game_score >= ConstDefine.levelupScore[i]) {
+					var newlevel = ConstDefine.levelupScore.length - 1 - i
+					if(newlevel > Static.game_level) {
+						Static.game_level = newlevel
+						log("Level up!")
+					}
+				}
+			}
+
 			//stop timer
 			this.stopTetrominoTimer()
 			//clear lines
@@ -531,7 +558,7 @@ var Wall = function () {
 	w.draw = function () {
 		Draw.fillRect(this.canvas, this.UIPos.x, this.UIPos.y,
 			this.body[0].length * ConstDefine.block_width,
-			this.body.length * ConstDefine.block_height, ConstColor.WallBgColor)
+			this.body.length * ConstDefine.block_height, ConstColor.WallColor)
 
 		for (let i = 0; i < this.body[0].length; i++) {
 			for (let j = 0; j < this.body.length; j++) {
@@ -540,18 +567,20 @@ var Wall = function () {
 					let y = j * ConstDefine.block_height + this.UIPos.y
 
 					if (this.body[j][i].disappearAnimCount % 2 == 0) {
-						Draw.drawRect(this.canvas, x, y, ConstDefine.block_width, ConstDefine.block_height, ConstColor.BlockColor)
-						Draw.fillRect(this.canvas, x, y, ConstDefine.block_width, ConstDefine.block_height, ConstBlockColor[this.body[j][i].type])
+						Draw.fillRect(this.canvas, x + 1, y + 1, ConstDefine.block_width - 2, ConstDefine.block_height - 2, ConstColor.BlockColor)
+						Draw.drawRect(this.canvas, x + 1, y + 1, ConstDefine.block_width - 2, ConstDefine.block_height - 2, ConstColor.BlockBorderColor)
 					}
 				}
 			}
 		}
 
-		this.tetromino.draw(this.UIPos)
+		if(Static.game_state == ConstDefine.gameStateRunning) {
+			this.tetromino.draw(this.UIPos)
+		}
 		
 		Draw.drawRect(this.canvas, this.UIPos.x, this.UIPos.y,
 			this.body[0].length * ConstDefine.block_width,
-			this.body.length * ConstDefine.block_height, ConstColor.WallColor)
+			this.body.length * ConstDefine.block_height, ConstColor.WallBorderColor)
 	}
 
 	// w.getRect = function() {
@@ -682,6 +711,9 @@ var Game = function () {
 		wall.resetTetrominoTimer()
 
 		startButton.active = false
+
+		scoreText.innerHTML = Static.game_score
+		linesText.innerHTML = Static.game_lines
 	}
 
 	g.pauseGame = function () {
